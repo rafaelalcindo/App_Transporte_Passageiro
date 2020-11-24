@@ -36,7 +36,8 @@ npm-debug.log
 yarn-error.log
 
 # Ignora o services
-/services/*
+#
+services/
 
 # BUCK
 buck-out/
