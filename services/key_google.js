@@ -1,3 +1,3 @@
-const apiKey = 'AIzaSyAnQ0_cLg9OSAp0lBAFPDEgKr92NE3KDZs'
+const apiKey = '__SUA_CHAVE__'
 
 export default apiKey;

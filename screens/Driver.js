@@ -65,6 +65,7 @@ export default class Driver extends Component {
         &destination=place_id:${destinationPlaceId}&key=${apiKey}`
       );
 
+      
       const json = await response.json();
       
       const points = Polyline.decode(json.routes[0].overview_polyline.points);
