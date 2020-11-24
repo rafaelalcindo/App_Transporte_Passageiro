@@ -35,6 +35,9 @@ node_modules/
 npm-debug.log
 yarn-error.log
 
+# Ignora o services
+services/key_google.js
+
 # BUCK
 buck-out/
 \.buckd/

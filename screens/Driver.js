@@ -5,14 +5,16 @@ import {
   Text,
   TextInput,
   TouchableHighlight,
-  Keyboard
+  TouchableOpacity,
+  Keyboard,
+  ActivityIndicator
 } from 'react-native';
 
-import io from 'socket.io-client'
+import socketIO from 'socket.io-client'
 
 import MapView, { Marker } from 'react-native-maps'
 import Geolocation from '@react-native-community/geolocation';
-import apiKey from './services/key_google'
+import apiKey from '../services/key_google'
 import Polyline  from '@mapbox/polyline'
 
 // var _ = require('lodash');
@@ -20,24 +22,16 @@ import Polyline  from '@mapbox/polyline'
 export default class Driver extends Component {
   constructor(props) {
     super(props);
-    // this.state = {
-    //   chatMessage: "",
-    //   chatMessages: []
-    // }
 
     this.state = {
       latitude: 0,
       longitude: 0,
       error: "null",
-      destination: "",
-      predictions: [],
-      pointsCoords: []
+      pointsCoords: [],
+      lookingForPassengers: false,
+      buttonText: "FIND PASSENGER"
     };
 
-    // this.onChangeDestinationDebounced = _.debounce(
-    //   this.onChangeDestination,
-    //   1000
-    // );
   }
 
   componentDidMount() {
@@ -48,11 +42,8 @@ export default class Driver extends Component {
         this.setState({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-          // latitude: -23.6632088,
-          // longitude: -46.718843,
           error: null
         })
-        // this.getRouteDirections();
       },
       error => this.setState({ error: error.message }),
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 2000 }
@@ -65,31 +56,13 @@ export default class Driver extends Component {
     this.setState({ chatMessage: "" })
   }
 
-  async onChangeDestination(destination) {
 
-    this.setState({ destination })
-    const apiUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?key=${apiKey}
-    &input=${destination}&location=${this.state.latitude}, ${this.state.longitude}&radius=1000`
-
-    try {
-      const result = await fetch(apiUrl)
-      const json = await result.json();
-
-      this.setState({
-        predictions: json.predictions
-      })
-    } catch (err) {
-      console.log(err)
-    }
-    
-  }
-
-  async getRouteDirections(placeId, descriptionName) {
+  async getRouteDirections(destinationPlaceId) {
     try {
 
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/directions/json?origin=${this.state.latitude},${this.state.longitude}
-        &destination=place_id:${placeId}&key=${apiKey}`
+        &destination=place_id:${destinationPlaceId}&key=${apiKey}`
       );
 
       const json = await response.json();
@@ -100,9 +73,7 @@ export default class Driver extends Component {
       })
 
       this.setState({ 
-        pointsCoords, 
-        predictions: [],
-        destination: descriptionName
+        pointsCoords
       })
 
       Keyboard.dismiss();
@@ -112,8 +83,29 @@ export default class Driver extends Component {
     }
   }
 
+  async lookForPassengers() {
+      this.setState({
+          lookingForPassengers: true
+      })
+
+      const socket = socketIO.connect('http://192.168.0.34:3000')
+
+      socket.on('connect', () => {
+          socket.emit("lookingForPassenger")
+      })
+
+      socket.on("taxiRequest", routeResponse => {
+          console.log(routeResponse)
+          this.getRouteDirections(routeResponse.geocoded_waypoints[0].place_id)
+
+          this.setState({
+              lookForPassengers: false,
+              buttonText: "PASSENGER FOUND!"
+          })
+      })
+  }
+
   render() {
-  // const chatMessages = this.state.chatMessages.map(chatMessage => <Text key={chatMessage} >{chatMessage}</Text>)
 
     let marker = null;
 
@@ -125,30 +117,8 @@ export default class Driver extends Component {
       );
     }
 
-    const predictions = this.state.predictions.map(prediction => (
-      <TouchableHighlight
-        onPress={() => this.getRouteDirections(prediction.place_id, prediction.structured_formatting.main_text)}
-        key={prediction.place_id}
-      >
-        <Text style={styles.suggestions} key={prediction.place_id} >{ prediction.description }</Text>
-      </TouchableHighlight>
-      
-    ))
-
     return (
       <View style={styles.container} >
-
-        <TextInput
-          placeholder="Enter destination..."
-          value={this.state.destination}
-          style={styles.destinationInput}
-          onChangeText={destination => 
-            this.onChangeDestination(destination)
-          }
-        />
-        
-
-        {predictions}               
 
         <MapView 
           ref={map => {
@@ -170,7 +140,24 @@ export default class Driver extends Component {
           />
           {marker}
         </MapView>
+        
+        <TouchableOpacity
+            onPress={() => this.lookForPassengers()}
+            style={styles.bottomButton}
+        >
+            <View  >
+            <Text style={styles.bottomText} >{ this.state.buttonText }</Text>
+                {this.state.lookingForPassengers === true ? (
+                    <ActivityIndicator 
+                        animating={this.state.lookingForPassengers}
+                        size="large"
+                        style={styles.bottomText}
+                    />
+                ) : null}
+                
+            </View>
 
+        </TouchableOpacity>
 
       </View>
     )
@@ -179,6 +166,18 @@ export default class Driver extends Component {
 
 
 const styles = StyleSheet.create({
+    bottomButton: {
+        backgroundColor: 'black',
+        marginTop: "auto",
+        margin: 20,
+        paddingLeft:30,
+        paddingRight: 30,
+        alignSelf: "center"
+    },
+    bottomText: {
+        color: "white",
+        fontSize: 20
+    },
   suggestions: {
     backgroundColor: "white",
     padding: 5,
@@ -197,11 +196,10 @@ const styles = StyleSheet.create({
     backgroundColor: "white"
   },
   mapStyle: {
-    flex: 1
+    ...StyleSheet.absoluteFillObject
   },
   container: {
-    flex: 1,
-    backgroundColor: '#F5FCFF'
+    ...StyleSheet.absoluteFillObject
   },
   welcome: {
     fontSize: 20,
