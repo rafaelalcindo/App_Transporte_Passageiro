@@ -36,7 +36,7 @@ npm-debug.log
 yarn-error.log
 
 # Ignora o services
-services/key_google.js
+services/*
 
 # BUCK
 buck-out/
