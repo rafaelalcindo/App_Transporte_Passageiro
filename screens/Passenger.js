@@ -5,25 +5,23 @@ import {
   Text,
   TextInput,
   TouchableHighlight,
-  Keyboard
+  Keyboard,
+  TouchableOpacity
 } from 'react-native';
 
 import io from 'socket.io-client'
 
 import MapView, { Marker } from 'react-native-maps'
 import Geolocation from '@react-native-community/geolocation';
-import apiKey from './services/key_google'
+import apiKey from '../services/key_google'
 import Polyline  from '@mapbox/polyline'
+import socketIO from 'socket.io-client'
 
 // var _ = require('lodash');
 
 export default class Passenger extends Component {
   constructor(props) {
     super(props);
-    // this.state = {
-    //   chatMessage: "",
-    //   chatMessages: []
-    // }
 
     this.state = {
       latitude: 0,
@@ -34,10 +32,6 @@ export default class Passenger extends Component {
       pointsCoords: []
     };
 
-    // this.onChangeDestinationDebounced = _.debounce(
-    //   this.onChangeDestination,
-    //   1000
-    // );
   }
 
   componentDidMount() {
@@ -48,11 +42,8 @@ export default class Passenger extends Component {
         this.setState({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-          // latitude: -23.6632088,
-          // longitude: -46.718843,
           error: null
         })
-        // this.getRouteDirections();
       },
       error => this.setState({ error: error.message }),
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 2000 }
@@ -84,12 +75,12 @@ export default class Passenger extends Component {
     
   }
 
-  async getRouteDirections(placeId, descriptionName) {
+  async getRouteDirections(destinationPlaceId, descriptionName) {
     try {
 
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/directions/json?origin=${this.state.latitude},${this.state.longitude}
-        &destination=place_id:${placeId}&key=${apiKey}`
+        &destination=place_id:${destinationPlaceId}&key=${apiKey}`
       );
 
       const json = await response.json();
@@ -102,7 +93,8 @@ export default class Passenger extends Component {
       this.setState({ 
         pointsCoords, 
         predictions: [],
-        destination: descriptionName
+        destination: descriptionName,
+        routeResponse: json
       })
 
       Keyboard.dismiss();
@@ -112,10 +104,22 @@ export default class Passenger extends Component {
     }
   }
 
+  /**
+   * Chamando Um Motorista
+   */
+  async requestDriver() {
+    const socket = socketIO.connect('http://192.168.0.34:3000')
+
+    socket.on("connect", () => {
+      // Chamando o carro
+      socket.emit("taxiRequest", this.state.routeResponse)
+    })
+  }
+
   render() {
-  // const chatMessages = this.state.chatMessages.map(chatMessage => <Text key={chatMessage} >{chatMessage}</Text>)
 
     let marker = null;
+    let driverButton = null;
 
     if (this.state.pointsCoords.length > 1) {
       marker = (
@@ -123,6 +127,14 @@ export default class Passenger extends Component {
           coordinate={this.state.pointsCoords[this.state.pointsCoords.length -1]}
         />
       );
+
+      driverButton = (
+        <TouchableOpacity onPress={() => this.requestDriver()} style={styles.bottomButton} >
+          <View>
+            <Text style={styles.bottomText} >FIND DRIVE</Text>
+          </View>
+        </TouchableOpacity>
+      )
     }
 
     const predictions = this.state.predictions.map(prediction => (
@@ -137,18 +149,6 @@ export default class Passenger extends Component {
 
     return (
       <View style={styles.container} >
-
-        <TextInput
-          placeholder="Enter destination..."
-          value={this.state.destination}
-          style={styles.destinationInput}
-          onChangeText={destination => 
-            this.onChangeDestination(destination)
-          }
-        />
-        
-
-        {predictions}               
 
         <MapView 
           ref={map => {
@@ -171,6 +171,17 @@ export default class Passenger extends Component {
           {marker}
         </MapView>
 
+        <TextInput
+          placeholder="Enter destination..."
+          value={this.state.destination}
+          style={styles.destinationInput}
+          onChangeText={destination => 
+            this.onChangeDestination(destination)
+          }
+        />
+
+        {predictions}
+        {driverButton}
 
       </View>
     )
@@ -179,6 +190,18 @@ export default class Passenger extends Component {
 
 
 const styles = StyleSheet.create({
+  bottomButton: {
+    backgroundColor: 'black',
+    marginTop: "auto",
+    margin: 20,
+    paddingLeft:30,
+    paddingRight: 30,
+    alignSelf: "center"
+  },
+  bottomText: {
+    color: "white",
+    fontSize: 20
+  },
   suggestions: {
     backgroundColor: "white",
     padding: 5,
@@ -197,11 +220,10 @@ const styles = StyleSheet.create({
     backgroundColor: "white"
   },
   mapStyle: {
-    flex: 1
+    ...StyleSheet.absoluteFillObject
   },
   container: {
-    flex: 1,
-    backgroundColor: '#F5FCFF'
+    ...StyleSheet.absoluteFillObject
   },
   welcome: {
     fontSize: 20,
